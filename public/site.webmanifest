@@ -1,0 +1,17 @@
+{
+  "name": "Mohammed Thalha MA — Android Engineer",
+  "short_name": "Thalha",
+  "description": "Portfolio of Mohammed Thalha MA, Android engineer at Zoho.",
+  "start_url": "/",
+  "display": "minimal-ui",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "64x64",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

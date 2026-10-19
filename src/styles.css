@@ -1,0 +1,3507 @@
+/* ==========================================================================
+   Design tokens — the whole site is white, black ink, and one primary.
+
+   Nothing below this block names a colour directly; everything uses these
+   tokens. To retheme the entire site, change --accent. That's the whole job.
+   ========================================================================== */
+:root,
+[data-theme='dark'] {
+  /* Core palette */
+  --white: #ffffff;
+  --black: #0a0a0b;
+  --accent: #3ddc84; /* Android green — fills, marks, hover */
+  --accent-deep: #4ade80; /* bright vibrant text on dark */
+
+  /* Type */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Measure */
+  --measure: min(1080px, 90vw, calc(100vw - 2 * (var(--m) + 20px)));
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --m: clamp(16px, 2.4vh, 30px);
+
+  /* Photo print */
+  --photo-gray: 0;
+  --photo-bright: 0.96;
+  --photo-contrast: 1.06;
+  --photo-blend: normal;
+
+  /* Dark theme semantic tokens */
+  --bg: #090a0f;
+  --bg-rgb: 9, 10, 15;
+  --surface-plate: #11131c;
+  --ink: #f0f3f6;
+  --ink-rgb: 240, 243, 246;
+  --ink-2: rgba(240, 243, 246, 0.76);
+  --ink-3: rgba(240, 243, 246, 0.52);
+  --ink-4: rgba(240, 243, 246, 0.28);
+  --rule: rgba(255, 255, 255, 0.12);
+  --rule-strong: rgba(255, 255, 255, 0.24);
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-2: rgba(255, 255, 255, 0.08);
+  --accent-ink: var(--accent);
+  --on-accent: #050608;
+
+  font-family: var(--font-body);
+}
+
+[data-theme='light'] {
+  --accent: #3ddc84;
+  --accent-deep: #0e9f55;
+
+  --photo-gray: 0;
+  --photo-bright: 1.2;
+  --photo-contrast: 1;
+  --photo-blend: multiply;
+
+  --bg: #ffffff;
+  --bg-rgb: 255, 255, 255;
+  --surface-plate: #ffffff;
+  --ink: #0a0a0b;
+  --ink-rgb: 10, 10, 11;
+  --ink-2: rgba(10, 10, 11, 0.7);
+  --ink-3: rgba(10, 10, 11, 0.48);
+  --ink-4: rgba(10, 10, 11, 0.24);
+  --rule: rgba(10, 10, 11, 0.12);
+  --rule-strong: rgba(10, 10, 11, 0.3);
+  --surface: rgba(10, 10, 11, 0.035);
+  --surface-2: rgba(10, 10, 11, 0.07);
+  --accent-ink: var(--accent-deep);
+  --on-accent: var(--black);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  /* Disable rubber-band overscroll. This has to sit on the root scrolling element (html) to work reliably across browsers. */
+  overscroll-behavior: none;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  overflow-x: hidden;
+  /* Same as html, belt-and-braces against rubber-banding: the last works screen no longer bounces back up, it sits flush at the bottom */
+  overscroll-behavior: none;
+}
+
+canvas {
+  display: block;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.content {
+  position: relative;
+  z-index: 10;
+}
+
+/* Shared inner column: one measure for every section on the page. */
+.section-inner {
+  width: var(--measure);
+  margin: 0 auto;
+}
+
+/* Full-page film grain. The tile is generated in ui/NoiseOverlay.tsx; background-size is set
+   inline so it lands 1:1 in CSS px. `pixelated` is load-bearing — without it a retina display
+   resamples the 1px specks into flat grey and the grain vanishes. */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  background-repeat: repeat;
+  image-rendering: pixelated;
+}
+
+/* ==========================================================================
+   Hero
+   ========================================================================== */
+/* Centred, not bottom-aligned: the copy block's height varies with the viewport and the
+   content, and pinning it to the bottom let a tall block run off the top of the screen. */
+/* ---------- Load reveal ----------
+   The page arrives under a sheet of white that erodes away from the centre, so the site inks
+   itself onto the paper. The same stepped-sprite technique as the timeline plates, and the
+   same registered-integer trick that keeps every step on a whole frame (the ink-reveal block
+   further down explains why an integer and not steps()).
+
+   The sprite is CodyHouse's ink art with its alpha inverted and its ink baked to pure white:
+   theirs is a dark blot that grows to cover a page, and what we need is a white sheet that
+   erodes to uncover one. Because the art is already white, this layer is painted directly
+   rather than masked — no mask, no mask-mode support question, no cream tint to correct. See
+   assets-src/experience/mkreveal.py and NOTICE.
+
+   The layer is invisible in itself — white on a white page. All it does is hold the content
+   back, which is also why the no-sprite fallback of a plain fade loses so little. */
+@property --reveal-frame {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 0;
+}
+
+.ink-reveal {
+  position: fixed;
+  /* The frames are 16:9 and must cover the viewport without being squashed to its shape, so
+     the layer is sized like object-fit: cover and centred. CodyHouse do this resize in JS;
+     these two max() expressions are the same thing in CSS. */
+  left: 50%;
+  top: 50%;
+  width: max(100vw, 177.78vh);
+  height: max(100vh, 56.25vw);
+  transform: translate(-50%, -50%);
+  z-index: 150;
+  pointer-events: none;
+  /* Background matches theme until the sprite arrives */
+  background: var(--bg);
+}
+
+/* Sprite in place: 15 frames, one filling the layer, frame n at n/14. */
+.ink-reveal.is-inked {
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-size: 1500% 100%;
+  background-position: calc(100% * var(--reveal-frame) / 14) 0;
+  transition: --reveal-frame var(--reveal-in, 0.75s) linear;
+}
+
+:root:not([data-theme='light']) .ink-reveal.is-inked,
+[data-theme='dark'] .ink-reveal.is-inked {
+  filter: invert(1);
+}
+
+.ink-reveal.is-open {
+  --reveal-frame: 14;
+}
+
+/* The last frames still hold a few percent of speckle, so the layer fades out rather than
+   popping away from under whatever text those specks were sitting on. */
+.ink-reveal.is-done {
+  opacity: 0;
+  /* The frame transition is restated, not just opacity: this rule comes later in the file at
+     equal specificity, so listing opacity alone would drop the in-flight frame transition and
+     snap the sprite to its last frame. Invisible at this point, but not worth the surprise. */
+  transition: opacity 0.3s linear, --reveal-frame var(--reveal-in, 0.75s) linear;
+}
+
+.hero {
+  /* Positioning context for .scroll-cue, which is absolutely placed at the bottom. */
+  position: relative;
+  min-height: 100vh;
+  /* The small viewport — 100vh on a phone is measured with the browser chrome retracted, so
+     it overshoots what is actually on screen and pushes the scroll cue past the fold. */
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 12vh 0 14vh;
+}
+
+.about {
+  width: var(--measure);
+  text-align: left;
+  pointer-events: none;
+
+  /* Two columns: the copy, then the portrait. A real column for the portrait rather than an
+     absolutely-placed layer, so type and photograph cannot overlap at any width — no z-index
+     ordering to get right, and no width where the display title runs into a face.
+
+     The portrait's right edge lands on the right edge of the measure, the same edge every
+     other section on the page is ruled to, and --home-gap is the whole of the spacing between
+     it and the copy.
+
+     --home-bleed hangs the plate further out into the page gutter than that; it is on, at
+     120px. The portrait's TRACK is narrower than the portrait itself by that amount, so the
+     copy keeps the width rather than paying for it. It reads off the gutter —
+     (100vw - measure) / 2 — and is capped, so where the gutter is only 5vw it can never push
+     the plate off screen. */
+  --home-bleed: min((100vw - var(--measure)) / 2 - 16px, var(--home-push, 120px));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc(var(--home-width, 26vw) - var(--home-bleed));
+  gap: var(--home-gap, clamp(24px, 3.5vw, 64px));
+  align-items: center;
+}
+
+/* ---------- Portrait in the hero's right-hand space ----------
+   The ink treatment of the experience plates — desaturated, multiplied into the page, torn
+   frame over the hard edges — with no sprite wipe, since the hero has no hover target to
+   reveal against.
+
+   It lives INSIDE .about, so framer's scroll-driven blur and fade carry it away with the copy.
+   That block's animated filter does isolate the photo's mix-blend-mode, but multiplying
+   against pure white is the identity operation, so on this page the only thing isolation
+   costs is blending with the copy — and the photo sits behind the copy anyway. Nothing in
+   here may take a transform, though: vertical centring is flex for that reason. */
+/* Grid item in the second column. Wider than its track by --home-bleed and pulled right by
+   the same amount, so its margin box fills the track exactly while the picture itself hangs
+   out into the gutter. */
+.hero-photo {
+  width: var(--home-width, 26vw);
+  margin-right: calc(-1 * var(--home-bleed));
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.hero-photo-plate {
+  position: relative;
+  width: 100%;
+  /* The photo's own ratio, so it is never stretched. */
+  aspect-ratio: 560 / 705;
+}
+
+.hero-photo-img,
+.hero-photo-edge {
+  position: absolute;
+  inset: 0;
+}
+
+.hero-photo-img {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  /* The shared photo print — see the token block. Its numbers were read off a pixel
+     simulation of this exact composite (filter → multiply → torn frame) on this photo, whose
+     busy window background is what the lift is there to burn away. */
+  filter: grayscale(var(--photo-gray)) brightness(var(--photo-bright)) contrast(var(--photo-contrast));
+  mix-blend-mode: var(--photo-blend, multiply);
+  opacity: var(--home-photo, 0.85);
+}
+
+/* Torn ink border over the photo's hard edges — the same frame the timeline plates use. That
+   art is landscape and this plate is portrait, so the tears stretch; they still read as torn. */
+.hero-photo-edge {
+  background: var(--bg);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+/* The entrance animation lives on the inner element: its fill:both only locks the inner opacity, leaving the outer scroll-driven opacity free */
+.about-intro {
+  animation: fadeDown 1.6s var(--ease) both;
+  max-width: 900px;
+}
+
+.about-title {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(38px, 8vw, 104px);
+  line-height: 0.94;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  margin-bottom: 0.34em;
+}
+
+/* The accent's job in the hero: one full stop. */
+.about-title::after {
+  content: '.';
+  color: var(--accent-ink);
+}
+
+.about-body {
+  margin: 0.8em 0 0;
+  max-width: 62ch;
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: clamp(14px, 1.15vw, 17px);
+  line-height: 1.62;
+  color: var(--ink-2);
+}
+
+/* Inline links in body copy: the container is pointer-events:none, so links must re-enable clicks themselves */
+.about-link {
+  pointer-events: auto;
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule-strong);
+  transition: color 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+
+.about-link:hover {
+  color: var(--accent-ink);
+  border-bottom-color: var(--accent);
+}
+
+/* NOW line */
+.about-now {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5em 0.9em;
+  margin: 2.2em 0 0;
+  max-width: 72ch;
+  font-family: var(--font-mono);
+  font-size: clamp(10px, 0.95vw, 12px);
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+
+/* Specialties line: same mono treatment as the NOW line, one notch quieter. */
+.about-specialties {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5em 0.9em;
+  margin: 1.8em 0 0;
+  max-width: 72ch;
+  font-family: var(--font-mono);
+  font-size: clamp(10px, 0.95vw, 12px);
+  line-height: 1.7;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+}
+.about-specialties .about-now-label {
+  border-color: var(--rule-strong);
+  color: var(--ink-3);
+}
+
+/* The live dot in the NOW chip — blinks green to say "this is current". */
+.now-blink {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 0.55em;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 var(--accent);
+  animation: nowBlink 1.8s var(--ease) infinite;
+}
+
+@keyframes nowBlink {
+  0% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  70% {
+    opacity: 1;
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+  85% {
+    opacity: 0.25;
+  }
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+
+.about-now-label {
+  padding: 3px 9px;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  font-size: 0.86em;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+}
+
+.scroll-cue {
+  position: absolute;
+  bottom: 5vh;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+.scroll-cue-label {
+  animation: cueLabelPulse 2.4s ease-in-out infinite;
+}
+
+.scroll-cue-track {
+  position: relative;
+  width: 1px;
+  height: 44px;
+  overflow: hidden;
+  background: linear-gradient(var(--rule-strong), transparent);
+}
+
+.scroll-cue-dot {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 3px;
+  height: 9px;
+  margin-left: -1.5px;
+  background: var(--accent);
+  animation: cueDot 1.9s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes cueDot {
+  0% {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(44px);
+    opacity: 0;
+  }
+}
+
+@keyframes cueLabelPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ---------- Hero frame + corner metadata (fixed, fades out on scroll) ---------- */
+.hero-chrome {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+  font-family: var(--font-mono);
+}
+
+.hero-frame {
+  position: absolute;
+  inset: var(--m);
+  border: 1px solid var(--rule);
+}
+
+.hero-mark {
+  position: absolute;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--ink-4);
+}
+.hero-mark.tl {
+  top: var(--m);
+  left: var(--m);
+  transform: translate(-50%, -50%);
+}
+.hero-mark.tr {
+  top: var(--m);
+  right: var(--m);
+  transform: translate(50%, -50%);
+}
+.hero-mark.bl {
+  bottom: var(--m);
+  left: var(--m);
+  transform: translate(-50%, 50%);
+}
+.hero-mark.br {
+  bottom: var(--m);
+  right: var(--m);
+  transform: translate(50%, 50%);
+}
+
+.hero-meta {
+  position: absolute;
+  font-size: clamp(9px, 0.9vw, 10.5px);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+.hero-meta .hm-name {
+  display: block;
+  text-transform: none;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+}
+.hm-tl {
+  top: calc(var(--m) + 16px);
+  left: calc(var(--m) + 20px);
+}
+.hm-bl {
+  bottom: calc(var(--m) + 16px);
+  left: calc(var(--m) + 20px);
+}
+.hm-right {
+  top: 50%;
+  right: calc(var(--m) + 7px);
+  writing-mode: vertical-rl;
+  transform: translateY(-50%);
+  letter-spacing: 0.28em;
+}
+
+@media (max-width: 640px) {
+  .hm-right {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   Section heads — one pattern, used by Résumé / Works / Writing.
+   Numbered like a contents page: the spine that holds the sections together.
+   ========================================================================== */
+.sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: clamp(12px, 2vw, 24px);
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.sec-no {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  color: var(--accent-ink);
+}
+
+.sec-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 5vw, 60px);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.sec-tagline {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.sec-sub {
+  margin: 1.4em 0 0;
+  max-width: 62ch;
+  font-size: clamp(14px, 1.4vw, 16.5px);
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+/* ==========================================================================
+   Floating controls — bottom-left sound & theme controls
+   ========================================================================== */
+.floating-controls {
+  position: fixed;
+  left: calc(var(--m) + 4px);
+  bottom: calc(var(--m) + 4px);
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.floating-controls .sound-toggle,
+.floating-controls .theme-toggle {
+  position: static;
+  left: auto;
+  bottom: auto;
+}
+
+.sound-toggle,
+.theme-toggle {
+  position: fixed;
+  left: calc(var(--m) + 4px);
+  bottom: calc(var(--m) + 4px);
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--surface-plate);
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease), background 0.2s var(--ease);
+}
+.sound-toggle:hover,
+.theme-toggle:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.theme-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+}
+.sound-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--rule-strong);
+  background: none;
+  transition: background 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.sound-dot.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ==========================================================================
+   Skills — an editorial table: group label left, items right.
+   Row rhythm mirrors the résumé's .tl-body two-column grid.
+
+   ========================================================================== */
+.skills {
+  padding: clamp(40px, 7vh, 90px) 0 clamp(40px, 8vh, 90px);
+}
+
+/* ---------- The skills graph (03) ----------
+   An Obsidian-style graph: a hub per group, skills hanging off it, hubs cross-linked. Every
+   position is computed in skillsGraph.ts — nothing here places anything.
+
+   The hover focus is the whole point: the hovered node and everything it touches stay ink,
+   the rest drops back to a whisper. That is what makes it a graph you can read rather than a
+   picture of one. */
+.sk-graph {
+  --graph-measure: min(1320px, 96vw);
+  width: var(--graph-measure);
+  margin-left: calc((100% - var(--graph-measure)) / 2);
+  margin-right: calc((100% - var(--graph-measure)) / 2);
+  margin-top: clamp(24px, 4vh, 44px);
+  /* The custom cursor is hidden site-wide; over the graph a pointer says the nodes respond. */
+  cursor: default;
+}
+
+.sk-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* The view is fixed — no pan or zoom — so it never fights the page's scroll. Keep text
+     selection from firing when a label is clicked. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Edges are thin and take no pointer — hover / click lives on the nodes. */
+.sk-edges {
+  pointer-events: none;
+}
+
+.sk-edge {
+  fill: none;
+  stroke: var(--rule-strong);
+  stroke-width: 0.8;
+  transition: stroke 0.25s var(--ease), stroke-width 0.25s var(--ease);
+}
+
+/* With something focused, every other edge recedes. */
+.sk-svg.is-focused .sk-edge {
+  stroke: var(--rule);
+}
+
+.sk-svg .sk-edge.is-on {
+  stroke: var(--accent-deep);
+  stroke-width: 1.3;
+}
+
+.sk-hit {
+  fill: transparent;
+  /* Nodes can be grabbed and dragged; the whole hit target keeps touch drags from scrolling. */
+  cursor: grab;
+  touch-action: none;
+}
+
+.sk-node:active .sk-hit {
+  cursor: grabbing;
+}
+
+.sk-node-dot {
+  fill: var(--ink-3);
+  transition: fill 0.25s var(--ease);
+}
+
+/* Hubs read as nodes, not full-black punctuation — the solid ink dots were too heavy against
+   the white. A softer grey keeps the hierarchy without the harsh contrast. */
+.sk-node.is-hub .sk-node-dot {
+  fill: var(--ink-2);
+}
+
+.sk-node.is-core .sk-node-dot {
+  fill: var(--accent);
+  stroke: var(--accent-deep);
+  stroke-width: 1;
+}
+
+/* Clicking a node pins the focus; a thin ring says which one is held. */
+.sk-node.is-sel .sk-node-dot {
+  stroke: var(--accent-deep);
+  stroke-width: 1.2;
+}
+
+.sk-glyph {
+  fill: none;
+  stroke: var(--ink-4);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 0.25s var(--ease);
+}
+
+/* Hub marks sit inside the dot, in the paper white against the ink fill so the icon reads as the
+   group's identity. */
+.sk-hub-icon {
+  color: var(--white);
+  fill: none;
+  stroke: none;
+  transition: color 0.25s var(--ease);
+}
+
+.sk-hub-icon .is-fill {
+  fill: currentColor;
+}
+
+.sk-hub-icon .is-stroke {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* On the accent core the white mark would glare; the deep accent keeps it legible. */
+.sk-node.is-core .sk-hub-icon {
+  color: var(--accent-deep);
+}
+
+/* The labels and glyphs stay hidden while the graph blooms from its knot, then fade in once it
+   has settled — the dots find their places first, the names arrive after, as Obsidian does. */
+.sk-svg .sk-glyph,
+.sk-svg .sk-hub-icon,
+.sk-svg .sk-name {
+  opacity: 0;
+  transition: opacity 0.6s var(--ease), stroke 0.25s var(--ease), fill 0.25s var(--ease),
+    color 0.25s var(--ease);
+}
+
+.sk-svg.is-settled .sk-glyph,
+.sk-svg.is-settled .sk-hub-icon,
+.sk-svg.is-settled .sk-name {
+  opacity: 1;
+}
+
+.sk-name {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  fill: var(--ink-2);
+  /* Labels are dense enough to cross an edge or two — a white outline behind the glyphs keeps
+     them legible without a filled plate behind them. */
+  paint-order: stroke fill;
+  stroke: var(--bg);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+  transition: fill 0.25s var(--ease);
+}
+
+.sk-node.is-hub .sk-name {
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  fill: var(--ink);
+}
+
+/* Focus: the node and its neighbours come forward, everything else goes quiet. */
+.sk-node.is-on .sk-node-dot {
+  fill: var(--accent-deep);
+}
+
+.sk-node.is-on .sk-glyph {
+  stroke: var(--accent-deep);
+}
+
+/* Hub marks live inside the dot, and the dot goes accent-deep when on — keep the mark legible */
+.sk-node.is-hub.is-on .sk-hub-icon {
+  color: var(--on-accent);
+}
+
+.sk-node.is-on .sk-name {
+  fill: var(--ink);
+}
+
+/* The hub's name, shown only while it is the selected (zoomed) node. */
+.sk-hub-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  fill: var(--ink);
+  paint-order: stroke fill;
+  stroke: var(--bg);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+}
+
+.sk-node.is-dim {
+  opacity: 0.2;
+}
+
+.sk-node {
+  transition: opacity 0.25s var(--ease);
+}
+
+.sk-list {
+  margin-top: clamp(36px, 6vh, 68px);
+  border-top: 1px solid var(--rule);
+}
+
+.sk-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 128px) 1fr;
+  gap: 0 clamp(20px, 2.6vw, 40px);
+  align-items: baseline;
+  padding: clamp(16px, 2.4vh, 24px) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.sk-label {
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
+/* The single accent mark in this section: the group I live in day to day. */
+.sk-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 0.7em;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 0.05em;
+}
+
+.sk-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.sk-item {
+  padding: 5px 11px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: clamp(10px, 1vw, 11.5px);
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.sk-row:hover .sk-item {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+}
+
+/* ==========================================================================
+   Education — reuses the résumé's .timeline / .tl-* markup
+
+   ========================================================================== */
+.education {
+  padding: clamp(40px, 7vh, 90px) 0 clamp(40px, 8vh, 90px);
+}
+
+/* ---------- The education record (02) ----------
+   One degree set as one block rather than a one-item timeline. The type sizes are borrowed
+   deliberately: the degree matches .tl-place and .pj-name, the grade matches .stat-num, so
+   the section reads as part of the same system without a device of its own. The coursework
+   chips reuse Skills' .sk-list / .sk-row wholesale — see Education.tsx. */
+.edu-record {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: clamp(20px, 3vw, 56px);
+  align-items: end;
+  margin-top: clamp(36px, 6vh, 68px);
+}
+
+.edu-degree {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(21px, 2.8vw, 32px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--ink);
+}
+
+.edu-place {
+  margin-top: 0.5em;
+  font-size: clamp(13px, 1.3vw, 15px);
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.edu-period {
+  margin-top: 0.9em;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* The section's one accent, spent on its one number — the same allowance the stats band's
+   first figure gets. */
+.edu-grade {
+  display: flex;
+  align-items: baseline;
+  gap: 0.12em;
+  font-family: var(--font-display);
+  line-height: 0.9;
+  white-space: nowrap;
+}
+
+.edu-grade-num {
+  /* Deliberately smaller than .stat-num: this is one figure sitting beside the degree, not a
+     headline number in a band of its own, and at stat size it shouted over the section title. */
+  font-size: clamp(24px, 3vw, 36px);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.edu-grade-unit {
+  font-size: clamp(12px, 1.2vw, 15px);
+  color: var(--ink-4);
+}
+
+.edu-grade-label {
+  margin-left: 0.7em;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* .tl-points supplies the dashes, the measure and the colour; the grid below supplies the
+   gap, so its own em-based top margin is dropped. */
+.edu-points {
+  margin-top: 0;
+}
+
+/* The record's lower half: the credits, and the plate of college photographs beside them. */
+.edu-lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(240px, 34%, 400px);
+  gap: clamp(24px, 3.5vw, 64px);
+  align-items: start;
+  margin-top: clamp(22px, 3vh, 34px);
+}
+
+.edu-gal-plate {
+  position: relative;
+  width: 100%;
+  /* 8:5 — the torn frame art is exactly this ratio and the photographs are pre-cropped to it,
+     so neither is stretched and `cover` has nothing left to crop. */
+  aspect-ratio: 8 / 5;
+}
+
+/* The two photographs composite against each other INSIDE this group, and the group inks into
+   the page as one. The isolation is load-bearing: with mix-blend-mode on each photograph
+   instead, the region where they overlap mid-dissolve would be multiplied twice and go
+  isolation: isolate;
+  mix-blend-mode: var(--photo-blend, multiply);
+  opacity: var(--edu-photo, 0.85);
+}
+
+.edu-gal-img,
+.edu-gal-edge,
+.edu-gal-wipe {
+  position: absolute;
+  inset: 0;
+}
+
+.edu-gal-img {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  filter: grayscale(var(--photo-gray)) brightness(calc(var(--photo-bright) * 0.92))
+    contrast(calc(var(--photo-contrast) * 0.78));
+  -webkit-mask-size: 4000% 100%;
+  mask-size: 4000% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: 5.13% 0;
+  mask-position: 5.13% 0;
+}
+
+/* The first photograph uses the same white cover idea as the Experience plates */
+.edu-gal-img.is-dissolving {
+  animation: edu-dissolve var(--edu-dissolve, 1.4s) steps(37) var(--edu-dwell, 2.2s) forwards;
+}
+
+.edu-gal-wipe {
+  z-index: 2;
+  background: var(--bg);
+  -webkit-mask-size: 4000% 100%;
+  mask-size: 4000% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  --ink-frame: var(--ink-start, 10);
+  -webkit-mask-position: calc(100% * var(--ink-frame) / 39) 0;
+  mask-position: calc(100% * var(--ink-frame) / 39) 0;
+  transition: --ink-frame var(--ink-in, 1.4s) linear;
+}
+
+.edu-gal-stack.is-revealing .edu-gal-wipe {
+  --ink-frame: 39;
+}
+
+@keyframes edu-dissolve {
+  from {
+    -webkit-mask-position: 5.13% 0;
+    mask-position: 5.13% 0;
+  }
+  to {
+    -webkit-mask-position: 100% 0;
+    mask-position: 100% 0;
+  }
+}
+
+.edu-gal-edge {
+  background: var(--bg);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+/* ==========================================================================
+   Résumé
+
+   ========================================================================== */
+.resume {
+  padding: clamp(70px, 12vh, 150px) 0 clamp(40px, 8vh, 90px);
+}
+
+.timeline {
+  position: relative;
+  margin-top: clamp(48px, 8vh, 96px);
+}
+
+/* The vertical timeline rule */
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: linear-gradient(var(--rule-strong), transparent);
+}
+
+/* ---------- Ink reveal on the experience entries ----------
+   Hovering an entry reveals a company image in the empty column on the right, uncovered by a
+   40-frame sprite sheet of real ink stepped through with `steps()`. The frames were shot from
+   actual ink, which is why it reads as ink; a CSS blot never quite does.
+
+   Frame maths: the sprite is 40 frames wide, so `mask-size: 4000% 100%` makes one frame fill
+   the plate exactly, and frame n sits at mask-position-x = n/39. The reveal runs 10 → 39
+   because frames 0-9 are a static full cover — starting at 0 would mean ~0.5s of nothing
+   happening after you hover. Frame 10 is also the most opaque of the late cover frames, so
+   the photo is at its most hidden the instant the reveal begins. The ink erodes from the
+   centre outward, so the photo opens from the middle.
+
+   The frame is driven by --ink-frame, a registered <integer> custom property, rather than by
+   stepping mask-position itself. Two reasons:
+     - it transitions in BOTH directions. mask-position used to be animated in and stepped out
+       via transition, but removing an animation snaps the property back to its base value
+       without firing a transition, so the hide was always instant.
+     - an integer interpolates to whole numbers, so every intermediate value is exactly on a
+       frame boundary. Transitioning mask-position with steps() only lands on boundaries for
+       the full 10 → 39 range; interrupt it half way (leave the entry mid-reveal) and the
+       steps subdivide a partial range, parking the mask between two frames — which shows
+       half of each side by side with a hard seam down the plate.
+
+   Both overlays are solid page-white masked by their PNG rather than the PNG painted
+   directly: the source art is cream (#f9f8f1) and would tint visibly against our #fff.
+
+   Driven by scroll: each entry reveals as it crosses the middle of the viewport (the observer
+   is in Resume.tsx). Hover still reveals one under the pointer. Guards at the end of the file. */
+.tl-ink {
+  position: absolute;
+  top: 0;
+  /* The entry's own bottom padding, so the plate spans exactly the text and centres on it
+     rather than on the gap below. Read from the variable so it can't drift from the padding —
+     and so it collapses to 0 on the last entry, which has no padding to inset against. */
+  bottom: var(--tl-gap);
+  /* Negative, so the plate sits out in the page gutter rather than over the text. Derived
+     from the gutter itself — (100vw - measure) / 2 — instead of a vw guess: between 900 and
+     1200px the gutter is only 5vw, and a fixed -5vw would leave the plate flush to the
+     viewport edge. This keeps its right edge 16px inside the viewport and never pushes it
+     more than 104px past the measure. --ink-push and --ink-width are knobs the dev panel
+     writes to; unset, the shipped values below apply. (30% and the clamp agree at every
+     viewport where the plate is visible: the 200px floor only binds below a 741px viewport,
+     and the ink is hidden under 900px.) */
+  right: calc(-1 * min((100vw - var(--measure)) / 2 - 16px, var(--ink-push, 104px)));
+  width: var(--ink-width, clamp(200px, 30%, 340px));
+  z-index: 0;
+  pointer-events: none;
+  /* Hidden outright at rest. The sprite's "full cover" frames are NOT fully opaque — frame 10
+     bottoms out at alpha 171 and ~2.5% of its pixels are translucent — so relying on the ink
+     alone let faint patches of the photo show through before hovering. visibility is used
+     rather than opacity because opacity here would isolate the photo's mix-blend-mode.
+     The delay is derived from the exit duration rather than hardcoded, so the plate can't
+     start disappearing mid-flood when --ink-out is tuned. */
+  visibility: hidden;
+  transition: visibility 0s linear calc(var(--ink-out, 0.8s) + 0.05s);
+  /* Flex centring rather than a transform: a transform here would make this a stacking
+     context and isolate the photo's mix-blend-mode, silently killing the ink look. */
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Holds the three layers. Must stay free of opacity/transform for the same reason. */
+.tl-ink-plate {
+  position: relative;
+  width: 100%;
+  /* Matches the sprite's own frame ratio (205x115) so the ink isn't stretched. */
+  aspect-ratio: 205 / 115;
+}
+
+.tl-ink-photo,
+.tl-ink-edge,
+.tl-ink-wipe,
+.pl-shot-photo,
+.pl-shot-edge {
+  position: absolute;
+  inset: 0;
+}
+
+.tl-ink-photo,
+.pl-shot-photo {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  /* The shared photo print — see the token block. */
+  filter: grayscale(var(--photo-gray)) brightness(var(--photo-bright)) contrast(var(--photo-contrast));
+  mix-blend-mode: var(--photo-blend, multiply);
+  opacity: var(--ink-photo, 0.82);
+}
+
+/* Torn ink border over the photo's hard edges. */
+.tl-ink-edge,
+.pl-shot-edge {
+  background: var(--bg);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+/* The sprite frame currently showing, 10 (full cover) to 39 (gone). Registered so it can be
+   transitioned; <integer> so it can only ever land on a whole frame. */
+@property --ink-frame {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 10;
+}
+
+/* The cover that erodes away. */
+.tl-ink-wipe {
+  background: var(--bg);
+  -webkit-mask-size: 4000% 100%;
+  mask-size: 4000% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  /* Frame 10 — the most opaque cover frame before the centre starts to open. */
+  --ink-frame: var(--ink-start, 10);
+  -webkit-mask-position: calc(100% * var(--ink-frame) / 39) 0;
+  mask-position: calc(100% * var(--ink-frame) / 39) 0;
+  /* Exit: the same 29 frames run backwards, so the ink floods over the photo again. Faster
+     than the reveal — a blot spreading reads quicker than one eroding, and this has to finish
+     inside the plate's 0.85s visibility delay. linear, not steps(): the integer property is
+     already what makes it discrete. */
+  transition: --ink-frame var(--ink-out, 0.8s) linear;
+}
+
+/* ink-on is the hover state. ink-pinned is the same reveal held open, and is what ships: the
+   observer in Resume.tsx adds it while the entry sits in the middle band of the viewport, and
+   the dev panel's always-on mode adds it to every entry at once. Deliberately a separate class
+   from ink-on, so a pointer leaving an entry cannot unpin a scroll-held reveal. */
+.tl-entry.ink-on .tl-ink,
+.tl-entry.ink-pinned .tl-ink {
+  visibility: visible;
+  transition: visibility 0s;
+}
+
+.tl-entry.ink-on .tl-ink-wipe,
+.tl-entry.ink-pinned .tl-ink-wipe {
+  --ink-frame: 39;
+  transition: --ink-frame var(--ink-in, 1.4s) linear;
+}
+
+/* Text sits above the stain. */
+.tl-entry.has-ink .tl-body {
+  position: relative;
+  z-index: 1;
+}
+
+/* The dot only needs the stacking order — it is already positioned, by its own rule below.
+   This selector is (0,3,0) against that rule's (0,1,0), so declaring `position: relative`
+   here — as this once did, sharing the block above — won every time and dropped the dot out
+   of the timeline rule it marks and back into the flow. Two ways, both wrong:
+     - in the block layout that cost it its box outright. It is a <span>, so relative or not
+       it was back to being an inline one, and width/height do not apply to a non-replaced
+       inline box: an 11px circle with no 11px to fill. That is why no dot was visible.
+     - as a flex item under the narrow layout it gets blockified, so the box came back — but
+       in flow, which is the entry's content edge, one padding-left clear of the rule.
+   `position` belongs to .tl-dot alone; anything scoped to .has-ink may only add paint order. */
+.tl-entry.has-ink .tl-dot {
+  z-index: 1;
+}
+
+/* The plate still overhangs the measure by ~a quarter at mid widths, so reserve that strip:
+   long place names wrap before they reach the ink instead of running under it. Wide enough
+   that the 62ch bullet column is unaffected — only the headings ever fill this much. Reset
+   under the same guards that hide the plate, at the end of the file. */
+.tl-entry.has-ink .tl-body {
+  padding-right: clamp(180px, 28%, 300px);
+}
+
+.tl-entry {
+  position: relative;
+  padding-left: clamp(28px, 4vw, 44px);
+  /* Plain spacing between entries now. This used to be ~46vh because the 3D camera needed
+     roughly one screen of scroll per entry to dock on it; with the scene gone that was just
+     dead page. A variable because .tl-ink has to inset by the same amount to centre on the
+     text — see there. */
+  --tl-gap: clamp(38px, 6vh, 72px);
+  padding-bottom: var(--tl-gap);
+}
+
+/* Zeroed through the variable, not padding-bottom directly, so the ink plate loses its inset
+   with it. Setting the padding alone left the last entry's plate insetting against padding
+   that wasn't there, riding ~36px above the centre of the text. */
+.tl-entry:last-child {
+  --tl-gap: 0px;
+}
+
+.tl-dot {
+  position: absolute;
+  left: 0;
+  top: 9px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* Two columns: period on the left, everything else on the right. */
+.tl-body {
+  display: grid;
+  grid-template-columns: minmax(88px, 128px) 1fr;
+  gap: 0 clamp(20px, 2.6vw, 40px);
+  align-items: start;
+}
+
+.tl-period {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  line-height: 1.7;
+  color: var(--ink-3);
+  padding-top: 0.4em;
+}
+
+.tl-main {
+  min-width: 0;
+}
+
+.tl-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.tl-place {
+  font-family: var(--font-display);
+  font-size: clamp(21px, 2.8vw, 32px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--ink);
+}
+
+/* Company logo chip */
+.tl-logo-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+
+.tl-logo-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.tl-role {
+  margin-top: 0.5em;
+  font-size: clamp(13px, 1.3vw, 15px);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.45;
+  color: var(--accent-ink);
+}
+
+.tl-points {
+  margin-top: 1.4em;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75em;
+  max-width: 62ch;
+}
+
+.tl-points li {
+  position: relative;
+  padding-left: 1.3em;
+  font-size: clamp(13.5px, 1.3vw, 15.5px);
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.tl-points li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.72em;
+  width: 8px;
+  height: 1px;
+  background: var(--ink-4);
+}
+
+.tl-group {
+  margin-top: 1.8em;
+}
+
+.tl-group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  flex-wrap: wrap;
+  font-family: var(--font-display);
+  font-size: clamp(16px, 2vw, 19px);
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.tl-group-logo {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.tl-group-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tl-group-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+}
+
+/* A row of platform logos */
+.tl-logos {
+  display: flex;
+  gap: 10px;
+  margin-top: 1.4em;
+}
+
+.tl-logo {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  color: var(--ink-2);
+  background: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: 50%;
+  transition: color 0.2s var(--ease), border-color 0.2s var(--ease), background 0.2s var(--ease),
+    transform 0.2s var(--ease);
+}
+
+.tl-logo svg {
+  width: 19px;
+  height: 19px;
+}
+
+.tl-logo:hover {
+  color: var(--on-accent);
+  border-color: var(--accent);
+  background: var(--accent);
+  transform: translateY(-2px);
+}
+
+/* Contact row under the résumé heading. */
+.resume-contact {
+  margin: 2em 0 0;
+  pointer-events: auto;
+}
+
+/* ==========================================================================
+   Numbers band
+   ========================================================================== */
+.stats {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: clamp(28px, 4vw, 60px);
+  width: var(--measure);
+  margin: 0 auto;
+  padding: clamp(70px, 13vh, 150px) 0;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--rule);
+}
+
+.stat-num {
+  font-family: var(--font-display);
+  font-size: clamp(38px, 5.5vw, 68px);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* One number carries the accent so the row has a focal point rather than four equal claims. */
+.stat:first-child .stat-num {
+  color: var(--accent-ink);
+}
+
+.stat-label {
+  max-width: 22ch;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
+/* ==========================================================================
+   Projects — personal work, all detail inline (no modal)
+   ========================================================================== */
+/* ==========================================================================
+   Projects — the plate book
+
+   Structure after Meng To's Sketchbook: a numbered index — its contents page —
+   over the plates it points at. Everything else here is this site's own: white,
+   hairlines, mono meta, one accent. None of the reference's warm paper, serif,
+   or 3D book with cast shadows and a magnifier came across; the drag-to-turn is
+   replaced by the ink this site already prints with. See ui/Works.tsx.
+   ========================================================================== */
+.works {
+  position: relative;
+  z-index: 10;
+  padding: clamp(60px, 10vh, 120px) 0 clamp(30px, 5vh, 60px);
+}
+
+/* -------------------------------------------------------- the contents page */
+.pl-index {
+  margin-top: clamp(36px, 6vh, 68px);
+}
+
+/* The same mono label the Skills rows use. */
+.pl-index-label {
+  margin-bottom: 13px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.pl-index-list {
+  list-style: none;
+  border-top: 1px solid var(--rule);
+}
+
+/* NN | name | year | lead stack | chevron. The name is set in display type so the index reads
+   as a table of contents and not as another row of metadata. */
+.pl-row {
+  display: grid;
+  grid-template-columns: 2.6em minmax(0, 1fr) 4.2em auto 1.1em;
+  align-items: baseline;
+  gap: 0 clamp(12px, 1.8vw, 26px);
+  padding: 13px 6px;
+  border-bottom: 1px solid var(--rule);
+  text-decoration: none;
+  color: inherit;
+  transition: background-color 0.22s var(--ease), padding-left 0.22s var(--ease);
+}
+
+/* Both hover and "the plate crossing the middle of the viewport" lift a shade. Only hover
+   also slides, which is the reference's move — is-current is set by scrolling rather than by
+   intent, and a row that shuffles itself out of the number column as you read past it reads
+   as a twitch. The tint and the accent are enough to mark it. */
+.pl-row:hover,
+.pl-row.is-current {
+  background: var(--surface);
+}
+
+.pl-row:hover {
+  padding-left: 14px;
+}
+
+.pl-row-no,
+.pl-row-year,
+.pl-row-lead,
+.pl-row-go {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+
+.pl-row-no {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--ink-4);
+}
+
+.pl-row-name {
+  /* Grid items are blockified, so the ellipsis works on this span without a display switch. */
+  font-family: var(--font-display);
+  font-size: clamp(16px, 1.9vw, 21px);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  color: var(--ink);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pl-row-year {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+}
+
+.pl-row-lead {
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--ink-4);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pl-row-go {
+  font-size: 13px;
+  color: var(--ink-4);
+  text-align: right;
+  transition: transform 0.22s var(--ease), color 0.22s var(--ease);
+}
+
+/* The row's one piece of accent, on the number and the chevron only. */
+.pl-row:hover .pl-row-no,
+.pl-row.is-current .pl-row-no,
+.pl-row:hover .pl-row-go,
+.pl-row.is-current .pl-row-go {
+  color: var(--accent-ink);
+}
+
+.pl-row:hover .pl-row-go,
+.pl-row.is-current .pl-row-go {
+  transform: translateX(3px);
+}
+
+/* ------------------------------------------------------------- the plates */
+.pl-plates {
+  display: grid;
+  gap: clamp(22px, 3.5vh, 40px);
+  margin-top: clamp(40px, 7vh, 80px);
+  /* The depth the page turn is seen through. Far enough back that a 13° leaf reads as a page
+     settling rather than as a slab swinging past the camera. */
+  perspective: 1800px;
+}
+
+/* A bound leaf. Three cues, all of them hairlines, which together read as a page out of a
+   sketchbook without borrowing any of the reference's depth: a stitched binding down the
+   left, the edges of the sheets underneath showing past the corner, and the gutter crease in
+   the middle (see .pl-body). No shadow and no 3D — this site has neither anywhere else, and a
+   soft shadow here would look like it wandered in from another website. */
+.pl-plate {
+  position: relative;
+  padding: clamp(18px, 2.4vw, 30px) clamp(20px, 2.6vw, 34px) clamp(22px, 3vw, 36px)
+    clamp(30px, 4.2vw, 56px);
+  border: 1px solid var(--rule);
+  background: var(--surface-plate);
+  box-shadow: 4px 4px 0 0 var(--bg), 4px 4px 0 1px var(--rule), 9px 9px 0 0 var(--bg),
+    9px 9px 0 1px var(--rule);
+  /* Hinged on the stitching, so the entrance turn pivots where the leaf is actually bound. */
+  transform-origin: clamp(12px, 1.7vw, 22px) 50%;
+  /* The index anchors land here, so keep the caption clear of the top of the viewport. */
+  scroll-margin-top: clamp(24px, 8vh, 90px);
+}
+
+/* The stitching. A repeating gradient rather than `border-left: dashed`, because the dash
+   length of a dashed border is up to the browser and a stitch that changes length between
+   Safari and Chrome is not a stitch. */
+.pl-plate::before {
+  content: '';
+  position: absolute;
+  top: clamp(14px, 2vw, 24px);
+  bottom: clamp(14px, 2vw, 24px);
+  left: clamp(12px, 1.7vw, 22px);
+  width: 1px;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--rule-strong) 0 6px,
+    transparent 6px 13px
+  );
+}
+
+/* The plate caption, as a printed plate carries it: number left, date right. */
+.pl-rail {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 9px;
+  margin-bottom: clamp(15px, 2.2vh, 24px);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.pl-rail-no {
+  color: var(--ink);
+}
+.pl-rail-year {
+  color: var(--ink-3);
+}
+
+/* Copy on the recto, art on the verso, and the gutter between them. The crease is a single
+   hairline sitting in the middle of the column gap — drawn on .pl-gutter rather than as a
+   border on either column so it stays centred in the gap at every width. */
+.pl-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(18px, 2.8vw, 40px) clamp(112px, 17vw, 230px);
+  align-items: stretch;
+}
+
+.pl-gutter {
+  position: relative;
+}
+
+/* Two hairlines a pixel apart: one crease reads as a rule, two read as a fold. */
+.pl-gutter::before,
+.pl-gutter::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: clamp(10px, 2vh, 22px);
+  width: 1px;
+  background: var(--rule);
+}
+.pl-gutter::before {
+  left: calc(50% - 1.5px);
+}
+.pl-gutter::after {
+  left: calc(50% + 1.5px);
+}
+
+.pl-main {
+  min-width: 0;
+}
+
+.pl-art {
+  justify-self: end;
+  /* The numeral is an inline-block so its box hugs the glyphs rather than filling the track —
+     which keeps it against the plate's right edge, and makes the ink mask map onto the digits
+     themselves instead of onto a mostly-empty box. */
+  text-align: right;
+}
+
+/* The art slot's stand-in — and not an apology for a missing screenshot. A plate number,
+   printed: set through the résumé plates' own 40-frame ink sprite run the other way, so the
+   ink floods IN over the numeral rather than eroding off a photo, and it lands like a stamp.
+
+   Frame 39 is bare paper; frame 12 is where it rests. 12 rather than 10 on measurement — at
+   frame 10 the sprite is 97.5% fully opaque and leaves no texture at all, and by 13 it has
+   begun punching holes (alpha floor 47). Frame 12 is 74% solid with a floor of 112/255 and
+   nothing at all below 64: mottled like ink soaked into paper, with no gaps in it. */
+.pl-num {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(64px, 12vw, 156px);
+  line-height: 0.8;
+  letter-spacing: -0.05em;
+  color: var(--ink-4);
+  -webkit-mask-size: 4000% 100%;
+  mask-size: 4000% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  --ink-frame: 39;
+  -webkit-mask-position: calc(100% * var(--ink-frame) / 39) 0;
+  mask-position: calc(100% * var(--ink-frame) / 39) 0;
+  /* linear, not steps(): --ink-frame is a registered <integer>, so it is already discrete and
+     can only ever land on a whole frame. The résumé plate block explains why that matters. */
+  transition: --ink-frame var(--pl-stamp, 0.9s) linear;
+}
+
+.pl-plate.is-stamped .pl-num {
+  --ink-frame: 12;
+}
+
+/* An entry with a `shot` gets an inked screenshot in the slot instead. It shares the résumé
+   plates' rules rather than restating them — .tl-ink-photo / .tl-ink-edge carry the .pl-shot-*
+   classes alongside, so the two prints can never drift apart. No isolation and no transform
+   here, for the reason given in the timeline block: either one would kill the multiply. */
+.pl-shot {
+  position: relative;
+  width: 100%;
+  /* The sprite's own frame ratio, so the torn edge is never stretched. */
+  aspect-ratio: 205 / 115;
+}
+
+/* ------------------------------------- shared with the old row list, kept as-is
+   These type scales are used by the plates verbatim. They predate the plate book and are
+   unchanged by it: one definition of what a project name / blurb / stack chip looks like. */
+
+/* Recognition worth interrupting the type for. Rationed to one or two entries.
+   Sits on its own line under the project name, not beside it. */
+.pj-award {
+  display: inline-block;
+  margin-top: 0.85em;
+  padding: 4px 9px;
+  border-radius: 2px;
+  border: 1px solid rgba(14, 159, 85, 0.35);
+  background: rgba(61, 220, 132, 0.12);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--accent-deep);
+}
+
+.pj-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(21px, 2.8vw, 32px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--ink);
+}
+
+.pj-blurb {
+  margin: 0.5em 0 0;
+  font-size: clamp(13px, 1.3vw, 15px);
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--accent-ink);
+}
+
+.pj-body {
+  margin: 1.1em 0 0;
+  max-width: 62ch;
+  font-size: clamp(13.5px, 1.3vw, 15.5px);
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+
+/* Stack chips. Same shape as .post-tag in Writing — one chip idiom for the whole site. */
+.pj-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 1.3em 0 0;
+  padding: 0;
+  list-style: none;
+}
+.pj-tag {
+  padding: 3px 9px;
+  border-radius: 2px;
+  border: 1px solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* An entry can carry two: where it runs and where the source is. */
+.pj-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 clamp(16px, 2vw, 28px);
+}
+
+.pj-link {
+  display: inline-block;
+  margin-top: 1.4em;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--ink);
+  border-bottom: 1px solid var(--rule-strong);
+  padding-bottom: 3px;
+  transition: color 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.pj-link:hover {
+  color: var(--accent-ink);
+  border-bottom-color: var(--accent);
+}
+/* Where the thing actually runs. The one link on a plate that takes the accent — it is the
+   primary action for the entry, which is the use the token block sanctions. */
+.pj-link.is-live {
+  border-bottom-color: var(--accent);
+}
+
+/* No repo to link to — reads as a statement, not a dead link. */
+.pj-link.is-private {
+  color: var(--ink-3);
+  border-bottom-style: dashed;
+  border-bottom-color: var(--rule);
+  cursor: default;
+}
+
+/* ==========================================================================
+   The sketchbook — a real page turn
+
+   Ported from Meng To's Sketchbook (threeui.com → MengTo/threeui). His geometry
+   and lighting model are kept as authored: the curl is a chain of N strips, each
+   hinged on the last, the whole chain swung by --tt while each link adds --td, and
+   every strip lit by |cos| of its own facing angle. See ui/Sketchbook.tsx for the
+   one substantive change (faces clip live text rather than slicing a bitmap) and
+   for what was left out.
+
+   His palette is not ported. That page is cream paper on a cream desk with brown
+   shadow; this one is white paper on white, so every shade here is neutral ink at
+   a fraction of his alpha — enough to model the curl, not enough to read as a
+   colour. --pg is 0% because his page art included the desk around the paper and
+   ours does not: our sheet fills the book box.
+   ========================================================================== */
+.sbk-wrap {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  width: 100%;
+  margin-top: clamp(32px, 5vh, 60px);
+  --pg: 0%;
+}
+
+.sbk-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  /* The case overhangs the pages and its board edge sits below that again, and both escape
+     this box — without the room they would land on the caption underneath. */
+  padding-bottom: clamp(14px, 3vw, 30px);
+  /* Vertical scroll still belongs to the page; horizontal drag turns a page. */
+  touch-action: pan-y;
+}
+
+.sbk-3d {
+  position: relative;
+  flex: 1 1;
+  min-width: 0;
+  /* Capped, as his is. At the full measure the spread is 1080×761 of paper for three sentences
+     and a number, and both pages read under-filled; a smaller book is a denser page. It also
+     leaves the gutter free for the arrows. */
+  max-width: 880px;
+  margin: 0 auto;
+  perspective: 1750px;
+  perspective-origin: 50% 46%;
+}
+
+.sbk-tilt {
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  will-change: transform;
+}
+
+.sbk-book {
+  position: relative;
+  width: 100%;
+  /* His book's proportions. */
+  aspect-ratio: 1760 / 1240;
+  transform-style: preserve-3d;
+  z-index: 1;
+}
+
+/* The sheet's own outline, above the flat pages and below the turning leaf — so the leaf
+   passes over the edge of the book rather than under it. */
+.sbk-book::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  border: 1px solid var(--rule);
+}
+
+/* What the book sits on. Three shadows at three softnesses is what stops a white sheet on a
+   white page from looking like a rectangle drawn on it; they lift as the leaf rises, which is
+   what --shade is for. Neutral, and at roughly half his alphas — brown on cream hides a lot
+   more than grey on white does. */
+.sbk-cast {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sbk-cast.ambient {
+  left: 2%;
+  right: 2%;
+  top: 24%;
+  bottom: -4%;
+  background: radial-gradient(
+    50% 50% at 50% 58%,
+    rgba(10, 10, 11, 0.15) 0%,
+    rgba(10, 10, 11, 0.08) 40%,
+    rgba(10, 10, 11, 0) 74%
+  );
+  filter: blur(26px);
+  opacity: calc(1 - var(--shade, 0) * 0.42);
+}
+
+.sbk-cast.contact {
+  left: 7%;
+  right: 7%;
+  top: 62%;
+  bottom: -1%;
+  background: radial-gradient(
+    50% 44% at 50% 42%,
+    rgba(10, 10, 11, 0.17) 0%,
+    rgba(10, 10, 11, 0.07) 48%,
+    rgba(10, 10, 11, 0) 78%
+  );
+  filter: blur(11px);
+  opacity: calc(1 - var(--shade, 0) * 0.5);
+}
+
+.sbk-cast.hair {
+  left: 11%;
+  right: 11%;
+  top: 78%;
+  bottom: 1%;
+  background: radial-gradient(
+    50% 52% at 50% 40%,
+    rgba(10, 10, 11, 0.16) 0%,
+    rgba(10, 10, 11, 0) 76%
+  );
+  filter: blur(4px);
+  opacity: calc(1 - var(--shade, 0) * 0.62);
+}
+
+/* ------------------------------------------------------------------------ the case
+   Every measurement is a fraction of --bw rather than a percentage of the box: percentage
+   insets resolve against width on one axis and height on the other, which on a book half as
+   tall as it is wide would give a square twice as deep at the head as at the fore-edge.
+
+   The boards are faintly filled and the pages are pure white. That one step of tone is what
+   makes a white case behind white paper legible at all; a hairline on its own reads as another
+   rectangle drawn on the page. */
+.sbk-cover {
+  position: absolute;
+  inset: calc(-1 * var(--bw, 0px) * 0.019);
+  z-index: 0;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  /* Boards are rounded, and more so at the fore-edge than at the spine. */
+  border-radius: 2px 4px 4px 2px;
+}
+
+/* The spine. Covered by the spread across the middle of the book, so what shows is the band at
+   head and tail — which is exactly where you would see it on a book lying open. */
+.sbk-cover::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: calc(var(--bw, 0px) * 0.022);
+  transform: translateX(-50%);
+  border-left: 1px solid var(--rule);
+  border-right: 1px solid var(--rule);
+}
+
+/* The thickness: the board seen edge-on under the tail, inset a little at both ends so it
+   reads as the underside of something rather than as a second rule. */
+.sbk-cover::after {
+  content: '';
+  position: absolute;
+  left: 0.7%;
+  right: 0.7%;
+  top: 100%;
+  height: calc(var(--bw, 0px) * 0.009);
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-top: 0;
+  border-radius: 0 0 4px 4px;
+}
+
+/* The page block. Three sheets stepping in toward the spread, so the stack tapers. */
+.sbk-leaves {
+  position: absolute;
+  z-index: 0;
+  background: var(--white);
+  border: 1px solid var(--rule);
+  border-radius: 1px 2px 2px 1px;
+}
+.sbk-leaves.l3 {
+  inset: calc(-1 * var(--bw, 0px) * 0.0115);
+}
+.sbk-leaves.l2 {
+  inset: calc(-1 * var(--bw, 0px) * 0.0077);
+}
+.sbk-leaves.l1 {
+  inset: calc(-1 * var(--bw, 0px) * 0.0039);
+}
+
+/* ---------------------------------------------------------------- the flat pages */
+.sbk-full {
+  position: absolute;
+  inset: 0;
+}
+
+/* Half the book, clipped, holding a spread twice its own width — so exactly one page shows.
+   His trick, and the reason a turn needs no re-layout of the pages that stay put. */
+.sbk-half {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+.sbk-half.left {
+  left: 0;
+}
+.sbk-half.right {
+  left: 50%;
+}
+
+.sbk-half > .sbk-pagebox {
+  position: absolute;
+  inset: 0;
+  width: 200%;
+}
+.sbk-half > .sbk-pagebox.right {
+  margin-left: -100%;
+}
+
+/* The fold, darkening as the leaf lifts off it. */
+.sbk-gutter-shade {
+  position: absolute;
+  top: var(--pg, 0%);
+  bottom: var(--pg, 0%);
+  width: 46%;
+  pointer-events: none;
+  opacity: calc(var(--shade, 0) * 0.62);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 5.2%, #000 94.8%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 5.2%, #000 94.8%, transparent 100%);
+}
+.sbk-gutter-shade.left {
+  right: 0;
+  background: linear-gradient(270deg, rgba(10, 10, 11, 0.16), rgba(10, 10, 11, 0) 82%);
+}
+.sbk-gutter-shade.right {
+  left: 0;
+  background: linear-gradient(90deg, rgba(10, 10, 11, 0.13), rgba(10, 10, 11, 0) 82%);
+}
+
+/* ------------------------------------------------------------------- the curl */
+.sbk-curl {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  /* --span and --n are written by the component; see there. */
+  width: calc(var(--bw, 0px) * var(--span));
+  transform-style: preserve-3d;
+  z-index: 6;
+}
+.sbk-curl.next {
+  left: 50%;
+  transform-origin: left center;
+  transform: rotateY(calc(-1 * var(--tt, 0deg)));
+}
+.sbk-curl.prev {
+  right: 50%;
+  transform-origin: right center;
+  transform: rotateY(var(--tt, 0deg));
+}
+
+/* Each strip hangs off the end of the last one and adds one more --td to the bend. Because
+   consecutive strips hinge on the edge they share, the chain is continuous: the type bends
+   across it with a crease, never a gap. */
+.sbk-strip {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: calc(var(--bw, 0px) * var(--span) / var(--n));
+  transform-style: preserve-3d;
+}
+.sbk-curl.next .sbk-strip {
+  transform-origin: left center;
+}
+.sbk-curl.prev .sbk-strip {
+  transform-origin: right center;
+}
+.sbk-curl.next > .sbk-strip {
+  left: 0;
+}
+.sbk-curl.prev > .sbk-strip {
+  right: 0;
+  left: auto;
+}
+.sbk-curl.next .sbk-strip .sbk-strip {
+  left: 100%;
+  transform: rotateY(var(--td, 0deg));
+}
+.sbk-curl.prev .sbk-strip .sbk-strip {
+  right: 100%;
+  transform: rotateY(calc(-1 * var(--td, 0deg)));
+}
+
+/* Where his face carried a slice of the page bitmap, ours clips a book-width copy of the live
+   page — offset by the very number his background-position-x used. The 1.1px of overhang on
+   the right is his, and it is what keeps a hairline of background from showing between two
+   strips at a steep angle. */
+.sbk-face {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: -1.1px;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  background: var(--surface-plate);
+}
+.sbk-face.back {
+  transform: rotateY(180deg);
+}
+
+.sbk-face > .sbk-pagebox {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: var(--bw, 0px);
+}
+
+/* Shade and gloss. --lit is |cos| of the strip's facing angle, so the sheen tracks the bend. */
+.sbk-face .sh,
+.sbk-face .gl {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--pg, 0%);
+  bottom: var(--pg, 0%);
+  pointer-events: none;
+}
+.sbk-face .gl {
+  background: var(--white);
+  opacity: calc(var(--shade, 0) * var(--lit, 1) * var(--lit, 1) * 0.2);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 5.2%, #000 94.8%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 5.2%, #000 94.8%, transparent 100%);
+}
+
+/* The gradient runs the other way on a back face, because you are looking at the sheet from
+   behind and the light has not moved. */
+.sbk-curl.next .sbk-face.front .sh,
+.sbk-curl.prev .sbk-face.back .sh {
+  background: linear-gradient(90deg, rgba(10, 10, 11, var(--a1, 0)), rgba(10, 10, 11, var(--a2, 0)));
+}
+.sbk-curl.next .sbk-face.back .sh,
+.sbk-curl.prev .sbk-face.front .sh {
+  background: linear-gradient(90deg, rgba(10, 10, 11, var(--a2, 0)), rgba(10, 10, 11, var(--a1, 0)));
+}
+
+/* The outermost strip is the leaf's own edge, so its shading fades out rather than stopping. */
+.sbk-strip.is-edge .sbk-face .sh,
+.sbk-strip.is-edge .sbk-face .gl {
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 91%, transparent 100%),
+    var(--hf);
+  mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 91%, transparent 100%), var(--hf);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+.sbk-curl.next .sbk-strip.is-edge .sbk-face.front,
+.sbk-curl.prev .sbk-strip.is-edge .sbk-face.back {
+  --hf: linear-gradient(90deg, #000 0 22%, transparent 96%);
+}
+.sbk-curl.next .sbk-strip.is-edge .sbk-face.back,
+.sbk-curl.prev .sbk-strip.is-edge .sbk-face.front {
+  --hf: linear-gradient(270deg, #000 0 22%, transparent 96%);
+}
+
+/* --------------------------------------------------------------- what is on a page */
+.sbk-spread {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  background: var(--surface-plate);
+}
+
+.sbk-page {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* Viewport-based, not percentage: a percentage here resolves against the half-page, which
+     is ~540px at full measure and would give a 20px margin on a page the size of a paperback. */
+  padding: clamp(18px, 2.6vw, 40px) clamp(20px, 3vw, 46px);
+}
+
+.sbk-fold {
+  background: var(--rule);
+}
+
+/* The verso: the plate's caption, its number, and the stack at the foot. */
+.sbk-page.verso {
+  align-items: stretch;
+}
+
+.sbk-rail {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: clamp(8px, 0.9vw, 10px);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.sbk-rail span:first-child {
+  color: var(--ink);
+}
+
+/* The same ink-stamped numeral the flat plates use, at the size a page can carry. Held at
+   frame 12 outright — a page you turned to has already been printed. */
+.sbk-num {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(90px, 19vw, 230px);
+  line-height: 0.78;
+  letter-spacing: -0.05em;
+  color: var(--ink-4);
+  --ink-frame: 12;
+  -webkit-mask-size: 4000% 100%;
+  mask-size: 4000% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: calc(100% * var(--ink-frame) / 39) 0;
+  mask-position: calc(100% * var(--ink-frame) / 39) 0;
+}
+
+.sbk-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  list-style: none;
+}
+.sbk-stack li {
+  padding: 2px 7px;
+  border-radius: 2px;
+  border: 1px solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: clamp(7px, 0.82vw, 9.5px);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* The recto: the writing. */
+.sbk-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(17px, 2.5vw, 31px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.14;
+  color: var(--ink);
+}
+
+.sbk-award {
+  align-self: flex-start;
+  margin-top: 0.8em;
+  padding: 3px 8px;
+  border-radius: 2px;
+  border: 1px solid rgba(14, 159, 85, 0.35);
+  background: rgba(61, 220, 132, 0.12);
+  font-family: var(--font-mono);
+  font-size: clamp(7px, 0.8vw, 9.5px);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+}
+
+.sbk-blurb {
+  margin: 0.55em 0 0;
+  font-size: clamp(11px, 1.24vw, 15px);
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--accent-ink);
+}
+
+.sbk-body {
+  margin: 1em 0 0;
+  font-size: clamp(11px, 1.22vw, 15px);
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.sbk-links {
+  margin-top: auto;
+  padding-top: 1.2em;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 clamp(12px, 1.6vw, 22px);
+}
+
+/* Above the .sbk-zone page-turn targets, which cover the whole spread at z-index 60 — without
+   this the anchor is painted under them and every click turns the page instead of following the
+   link. Only ever an <a> on the page at rest; the copies render as spans. */
+.sbk-link[href] {
+  position: relative;
+  z-index: 70;
+}
+
+.sbk-link {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: clamp(8px, 0.92vw, 10px);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+  border-bottom: 1px solid var(--rule-strong);
+  padding-bottom: 3px;
+}
+.sbk-link.is-live {
+  border-bottom-color: var(--accent);
+}
+.sbk-link.is-private {
+  color: var(--ink-3);
+  border-bottom-style: dashed;
+  border-bottom-color: var(--rule);
+}
+
+/* ------------------------------------------------------------------- the furniture */
+/* Half the book each: which one you grab decides which way the page goes. */
+.sbk-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  z-index: 60;
+  -webkit-tap-highlight-color: transparent;
+}
+.sbk-zone.prev {
+  left: 0;
+}
+.sbk-zone.next {
+  left: 50%;
+}
+.sbk-zone:active {
+  cursor: grabbing;
+}
+
+.sbk-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 70;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-4);
+  cursor: pointer;
+  transition: color 0.2s var(--ease);
+}
+.sbk-arrow:hover {
+  color: var(--accent-ink);
+}
+.sbk-arrow.left {
+  left: calc(-1 * clamp(10px, 2.4vw, 30px));
+}
+.sbk-arrow.right {
+  right: calc(-1 * clamp(10px, 2.4vw, 30px));
+}
+
+/* The filter defs are markup, not something to see. */
+.sbk-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* The riffle: two passes over the book on arrival. The pages that are standing still get the
+   motion blur — never the curl, whose strips would be flattened out of 3D by a filter — and it
+   steps up to the wider blur through the fast middle of the pass. */
+.sbk-wrap.is-riffle .sbk-full .sbk-spread,
+.sbk-wrap.is-riffle .sbk-half .sbk-spread {
+  filter: url(#sbk-mb1);
+}
+.sbk-wrap.is-riffle.is-hard .sbk-full .sbk-spread,
+.sbk-wrap.is-riffle.is-hard .sbk-half .sbk-spread {
+  filter: url(#sbk-mb2);
+}
+
+/* Twelve titles in under two seconds is a flicker, so the caption sits it out and arrives with
+   the page the book settles on. */
+.sbk-wrap.is-riffle .sbk-captions,
+.sbk-wrap.is-riffle .sbk-hint {
+  opacity: 0;
+}
+
+/* Both titles occupy the same cell, so the swap does not shift the line. */
+.sbk-captions {
+  display: grid;
+  justify-items: center;
+  margin: 0;
+  transition: opacity 0.35s var(--ease);
+}
+.sbk-caption {
+  grid-area: 1 / 1;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.sbk-hint {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  transition: opacity 0.4s var(--ease);
+}
+.sbk-hint.gone {
+  opacity: 0;
+}
+
+/* ==========================================================================
+   Writing
+   ========================================================================== */
+.writing {
+  position: relative;
+  z-index: 10;
+  padding: clamp(70px, 12vh, 150px) 0 clamp(90px, 16vh, 180px);
+}
+
+.post-list {
+  margin-top: clamp(40px, 6vh, 72px);
+}
+
+.post-row {
+  position: relative;
+  display: flex;
+  gap: clamp(18px, 3vw, 40px);
+  padding: 26px 2px;
+  border-bottom: 1px solid var(--rule);
+  text-decoration: none;
+  color: inherit;
+}
+.post-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 0;
+  height: 1px;
+  background: var(--accent);
+  transition: width 0.4s var(--ease);
+}
+.post-row:hover::before {
+  width: 100%;
+}
+.post-date {
+  flex: none;
+  width: 110px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding-top: 6px;
+}
+.post-main {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+.post-title {
+  font-family: var(--font-display);
+  font-size: clamp(18px, 2.1vw, 25px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.28;
+  color: var(--ink);
+  transition: color 0.2s var(--ease);
+}
+.post-row:hover .post-title {
+  color: var(--accent-ink);
+}
+.post-summary {
+  font-size: clamp(13.5px, 1.35vw, 15.5px);
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+.post-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.post-tag {
+  padding: 3px 9px;
+  border-radius: 2px;
+  border: 1px solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.post-cta {
+  flex: none;
+  margin-left: auto;
+  align-self: center;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-3);
+  transition: color 0.2s var(--ease);
+}
+.post-row:hover .post-cta {
+  color: var(--accent-ink);
+}
+
+/* Recruiter quick view */
+.rq-trigger {
+  position: fixed;
+  top: clamp(48px, 7vh, 64px);
+  right: clamp(16px, 3vw, 34px);
+  z-index: 30;
+  padding: 8px 15px;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease);
+}
+.rq-trigger:hover {
+  background: var(--surface-plate);
+  color: var(--accent-ink);
+}
+.rq-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(var(--bg-rgb, 9, 10, 15), 0.75);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.rq-card {
+  position: fixed;
+  z-index: 85;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, 92vw);
+  max-height: calc(100dvh - 2 * clamp(16px, 4vh, 40px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(26px, 3.5vw, 42px);
+  border-radius: 4px;
+  background: var(--surface-plate);
+  border: 1px solid var(--rule-strong);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.2);
+  color: var(--ink);
+}
+.rq-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  border: none;
+  background: none;
+  color: var(--ink-3);
+  font-size: 14px;
+  cursor: pointer;
+}
+.rq-close:hover {
+  color: var(--accent-deep);
+}
+.rq-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+}
+.rq-name {
+  margin: 0.6em 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.rq-role {
+  margin-top: 0.4em;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.rq-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 1.8em;
+}
+.rq-chip {
+  padding: 8px 14px;
+  border-radius: 2px;
+  border: 1px solid var(--rule-strong);
+  background: none;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease), background 0.2s var(--ease);
+}
+.rq-chip:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.rq-chip.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.rq-points {
+  margin: 1.4em 0 0;
+  padding: 0 0 0 1.2em;
+  list-style: none;
+  min-height: 4.6em;
+}
+.rq-points li {
+  position: relative;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin-bottom: 0.5em;
+}
+.rq-points li::before {
+  content: '';
+  position: absolute;
+  left: -1.2em;
+  top: 0.75em;
+  width: 8px;
+  height: 1px;
+  background: var(--accent);
+}
+.rq-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 1.8em;
+  flex-wrap: wrap;
+}
+.rq-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 18px;
+  border-radius: 2px;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease), background 0.2s var(--ease);
+}
+.rq-action:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.rq-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 500;
+}
+.rq-primary:hover {
+  background: transparent;
+  color: var(--accent-deep);
+  border-color: var(--accent-deep);
+}
+.rq-icon {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+}
+.rq-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes fadeDown {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ==========================================================================
+   GitHub contribution calendar
+   ========================================================================== */
+.github {
+  position: relative;
+  z-index: 10;
+  padding: clamp(60px, 10vh, 120px) 0 clamp(20px, 4vh, 50px);
+}
+
+.gh-link {
+  color: var(--ink-3);
+  text-decoration: none;
+  transition: color 0.2s var(--ease);
+}
+.gh-link:hover {
+  color: var(--accent-ink);
+}
+
+.gh-card {
+  margin-top: clamp(28px, 5vh, 52px);
+  padding: clamp(18px, 2.6vw, 28px);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--surface-plate);
+}
+
+/* 53 columns don't fit a phone; let the calendar scroll inside the card rather than
+   squashing the cells or forcing the page to scroll sideways. */
+.gh-scroll {
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-4) transparent;
+}
+
+.gh-months,
+.gh-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 12px;
+  gap: 3px;
+  min-width: max-content;
+}
+
+.gh-months {
+  margin-bottom: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+/* Labels are anchored to the week they start on, so let them run past their column. */
+.gh-months span {
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.gh-week {
+  display: grid;
+  grid-template-rows: repeat(7, 12px);
+  gap: 3px;
+}
+
+.gh-day {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+.gh-day.is-empty {
+  background: none;
+}
+
+/* The contribution ramp — the accent doing what it does everywhere else, in five steps. */
+.gh-day[data-level='1'] {
+  background: rgba(61, 220, 132, 0.36);
+}
+.gh-day[data-level='2'] {
+  background: rgba(61, 220, 132, 0.62);
+}
+.gh-day[data-level='3'] {
+  background: var(--accent);
+}
+.gh-day[data-level='4'] {
+  background: var(--accent-deep);
+}
+
+.gh-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.gh-stats {
+  display: flex;
+  gap: clamp(14px, 2.4vw, 30px);
+  flex-wrap: wrap;
+}
+.gh-stats strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.gh-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.gh-legend .gh-day {
+  width: 10px;
+  height: 10px;
+}
+.gh-legend span:first-child,
+.gh-legend span:last-child {
+  margin: 0 4px;
+}
+
+/* ==========================================================================
+   Footer — contact, then light under the page
+   ========================================================================== */
+.footer {
+  position: relative;
+  padding-top: clamp(70px, 12vh, 140px);
+  overflow: hidden;
+}
+
+.footer-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.footer-name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(22px, 3.4vw, 38px);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.footer-role {
+  display: block;
+  margin-top: 0.5em;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.footer-links {
+  margin-top: 0;
+}
+
+.footer-resume {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 24px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.footer-resume-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: color 0.2s var(--ease);
+}
+
+.footer-resume-link:hover {
+  color: var(--accent-ink);
+}
+
+.footer-resume-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  transition: transform 0.2s var(--ease), background 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.footer-resume-link:hover .footer-resume-arrow {
+  transform: translateY(3px);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.footer-resume-note {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 18px 0 clamp(90px, 16vh, 190px);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* ---------- The light under the page ----------
+   Layered radial gradients, no canvas and no blur filter — radial gradients are already soft,
+   so overlapping several at different widths, heights and x positions gives the organic
+   mountain silhouette for free and costs nothing to paint.
+
+   Opacity and scaleY are written every frame by ui/Aurora.tsx from scroll velocity; the CSS
+   only owns the shape, the palette and the slow horizontal drift.
+
+   The palette is a wider spread than before — deep green through mint, teal and lime — but
+   still one hue family on purpose. The whole design is monochrome plus one colour, and a full
+   spectrum in the last thing a visitor sees would undo that. To go rainbow anyway, swap the
+   hues below; nothing else needs to change. */
+.aurora {
+  --anchor: 100%; /* the edge the light grows from; flipped for .is-top */
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: min(58vh, 520px);
+  z-index: 5; /* above the white page background, below the content at z-index 10 */
+  pointer-events: none;
+  opacity: 0;
+  transform: scaleY(0.18);
+  transform-origin: bottom center;
+  will-change: opacity, transform;
+}
+
+/* The same light, mirrored to the top edge. Only the anchor and the insets flip — one
+   background declaration serves both, via the --anchor custom property. */
+.aurora.is-top {
+  --anchor: 0%;
+  top: 0;
+  bottom: auto;
+  transform-origin: top center;
+}
+
+.aurora-layer {
+  position: absolute;
+  left: -12%;
+  right: -12%;
+  bottom: -18%;
+  top: -10%;
+  background:
+    radial-gradient(38% 82% at 12% var(--anchor), rgba(14, 159, 85, 0.55) 0%, rgba(14, 159, 85, 0) 70%),
+    radial-gradient(30% 96% at 28% var(--anchor), rgba(61, 220, 132, 0.62) 0%, rgba(61, 220, 132, 0) 72%),
+    radial-gradient(34% 74% at 44% var(--anchor), rgba(154, 230, 92, 0.5) 0%, rgba(154, 230, 92, 0) 70%),
+    radial-gradient(28% 104% at 58% var(--anchor), rgba(168, 245, 200, 0.66) 0%, rgba(168, 245, 200, 0) 72%),
+    radial-gradient(36% 80% at 74% var(--anchor), rgba(47, 212, 181, 0.55) 0%, rgba(47, 212, 181, 0) 70%),
+    radial-gradient(40% 66% at 92% var(--anchor), rgba(34, 192, 110, 0.45) 0%, rgba(34, 192, 110, 0) 72%);
+  animation: auroraDrift 22s ease-in-out infinite alternate;
+}
+
+.aurora.is-top .aurora-layer {
+  top: -18%;
+  bottom: -10%;
+}
+
+@keyframes auroraDrift {
+  from {
+    transform: translate3d(-2.5%, 0, 0);
+  }
+  to {
+    transform: translate3d(2.5%, -5%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora {
+    display: none;
+  }
+  /* Keep the dot, drop the blink. */
+  .now-blink {
+    animation: none;
+  }
+  /* No stamp — the plate number is printed already. */
+  .pl-num {
+    --ink-frame: 12;
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   Custom cursor (pointer devices only — see ui/Cursor.tsx)
+   ========================================================================== */
+.cursor-dot,
+.cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 200; /* above the grain, so the cursor is never dimmed by it */
+  pointer-events: none;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.25s var(--ease), width 0.22s var(--ease), height 0.22s var(--ease),
+    margin 0.22s var(--ease), background 0.22s var(--ease), border-color 0.22s var(--ease);
+}
+
+.cursor-dot {
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  background: var(--accent-deep);
+}
+
+.cursor-ring {
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border: 1px solid var(--accent-deep);
+}
+
+/* Shown only once a real mouse has moved — otherwise it would sit in the corner on load. */
+body.has-cursor .cursor-dot {
+  opacity: 1;
+}
+body.has-cursor .cursor-ring {
+  opacity: 0.55;
+}
+
+/* Over anything clickable: the ring opens up and fills faintly. */
+body.has-cursor .cursor-ring.is-active {
+  width: 52px;
+  height: 52px;
+  margin: -26px 0 0 -26px;
+  background: rgba(61, 220, 132, 0.14);
+  opacity: 0.9;
+}
+
+body.has-cursor .cursor-ring.is-down {
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+}
+
+/* Hide the native cursor only while ours is actually on screen, so it can never leave a
+   pointer-less page behind. */
+@media (hover: hover) and (pointer: fine) {
+  body.has-cursor,
+  body.has-cursor * {
+    cursor: none !important;
+  }
+}
+
+/* No pointer to track — don't render the cursor at all. */
+@media (hover: none), (pointer: coarse) {
+  .cursor-dot,
+  .cursor-ring {
+    display: none;
+  }
+}
+
+/* ==================================================================
+   Mobile (≤640px) — last in the file so it overrides the equally-specific
+   base rules above
+   ================================================================== */
+@media (max-width: 640px) {
+  /* .about used to be overridden to 88vw here, which left the hero copy ruled ~3px inside
+     every section edge below it. It now simply keeps the measure it is given at the top of the
+     file, so the override is gone rather than restated. */
+
+  /* The portrait is in this column now, so buy back some of the vertical padding it costs. */
+  .hero {
+    padding: 8vh 0 12vh;
+  }
+
+  .scroll-cue {
+    display: none;
+  }
+
+  .edu-record {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 18px;
+  }
+  .about-now,
+  .about-specialties {
+    gap: 0.6em;
+  }
+
+  /* The index drops to NN | name | year — the lead-stack column and the chevron are the
+     first things a 3-inch row can do without. */
+  .pl-row {
+    grid-template-columns: 2.2em minmax(0, 1fr) auto;
+  }
+  .pl-row-lead,
+  .pl-row-go {
+    display: none;
+  }
+
+  /* No gutter left for the art beside the copy, so the plate keeps only its caption. A
+     hidden grid item still holds its track open, hence the single column. */
+  .pl-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pl-gutter,
+  .pl-art {
+    display: none;
+  }
+  /* The binding and the sheets underneath stay — they are what makes it a leaf — but the
+     stitching moves in with the narrower padding. */
+  .pl-plate {
+    padding-left: clamp(24px, 7vw, 34px);
+  }
+
+  /* The résumé's two-column entry collapses to one */
+  .tl-body {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .tl-period {
+    padding-top: 0;
+  }
+
+  /* Skills rows collapse the same way */
+  .sk-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .sec-head {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .sec-tagline {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+
+  .rq-trigger {
+    top: auto;
+    bottom: 16px;
+    right: 16px;
+  }
+  .sound-toggle {
+    left: 16px;
+    bottom: 16px;
+    padding: 6px 10px;
+  }
+  /* Corner metadata gives the bottom-left corner up to the sound toggle: at this width the two
+     overlap outright, and the toggle is a control while this is decoration that the hero copy
+     and the skills table already say in full. .hm-right goes at the top of the file for the
+     same reason. */
+  .hm-bl {
+    display: none;
+  }
+  .post-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .post-date {
+    width: auto;
+    padding-top: 0;
+  }
+  .post-cta {
+    margin-left: 0;
+    align-self: flex-start;
+  }
+  .stats {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 24px;
+  }
+  .gh-day {
+    width: 10px;
+    height: 10px;
+  }
+  .gh-week {
+    grid-template-rows: repeat(7, 10px);
+  }
+  .gh-months,
+  .gh-grid {
+    grid-auto-columns: 10px;
+  }
+  .gh-foot {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .footer-top {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .footer-bottom {
+    padding-bottom: clamp(80px, 14vh, 140px);
+  }
+}
+
+/* Where the book is up, the plates are still in the DOM but not painted — a screen reader
+   gets every project as text, since the book itself is aria-hidden. The query is the same
+   string Works.tsx gates the mount on, so the two can never disagree. */
+@media (min-width: 901px) and (hover: hover) and (pointer: fine) and
+  (prefers-reduced-motion: no-preference) {
+  .pl-plates {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* The book's own links are out of the tab order, because a focusable control inside an
+     aria-hidden subtree is one a screen reader cannot reach. So this list is what keyboard
+     users get — and hidden text that takes focus is worse than no text at all, since the focus
+     ring lands somewhere invisible. Tab into it and it comes back. */
+  .pl-plates:focus-within {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+}
+
+/* The graph needs both room and a pointer. Below that, the chip list is the section — and
+   above it the list stays in the DOM, unpainted, so screen readers still get every skill. */
+@media (min-width: 901px) {
+  .sk-list-alt {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 900px), (hover: none), (pointer: coarse) {
+  .sk-graph {
+    display: none;
+  }
+}
+
+/* Below this the 62ch column fills the measure, so there is no gutter left to hang a blot or a
+   portrait in. Both photographs stay — they move into the column instead of being dropped. */
+@media (max-width: 900px) {
+  /* One column. A flex column rather than `display: block` so `order` is available below —
+     leaving it a grid would also hold the empty portrait track open. */
+  .about {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The portrait leads the hero rather than sitting beside it, and it has to lead: .about's
+     opacity is driven from the page's own scroll and reaches 0 half a viewport down, so
+     anything placed after the copy on a phone has faded out before it could be scrolled to.
+     Above the title it is on screen at rest.
+
+     Small with it — at this width it is a byline portrait, not the subject of the page. The
+     desktop bleed is a negative margin into a gutter that no longer exists, so it goes. */
+  .hero-photo {
+    order: -1;
+    align-self: flex-start;
+    width: min(42vw, 168px);
+    margin-right: 0;
+    margin-bottom: clamp(18px, 3vh, 28px);
+  }
+
+  /* The plate leaves the gutter and becomes a block under the entry it belongs to. The
+     scroll-driven reveal still plays: what holds the plate back at rest is `visibility`, not
+     `display`, so it keeps its space in the flow and revealing costs no layout shift.
+     .tl-dot is absolutely placed, so the plate and .tl-body are the only two items to order. */
+  .tl-entry.has-ink {
+    display: flex;
+    flex-direction: column;
+  }
+  .tl-body {
+    order: 1;
+  }
+  .tl-ink {
+    order: 2;
+    position: static;
+    width: min(100%, 320px);
+    margin-top: clamp(14px, 2.4vh, 22px);
+    /* Aligned to the text's own left edge; flex-end is for the gutter it no longer sits in. */
+    justify-content: flex-start;
+  }
+
+  /* The plate goes under the credits rather than beside them. */
+  .edu-lower {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tl-entry.has-ink .tl-body {
+    padding-right: 0;
+  }
+}
+
+/* The plate is worth showing to someone who asked for less motion — it just should not erode
+   into view. The wipe goes and the photograph is simply there: in the gutter on the desktop
+   layout, under the entry on the mobile one. Last in the file so it wins over both.
+
+   This replaces a guard that also dropped the plate for `(hover: none)` and `(pointer: coarse)`.
+   That was right while hover was the only trigger; the reveal is scroll-driven now, so a phone
+   or a tablet can run it like anything else. */
+@media (prefers-reduced-motion: reduce) {
+  .tl-ink {
+    visibility: visible;
+    transition: none;
+  }
+  .tl-ink-wipe {
+    display: none;
+  }
+}
